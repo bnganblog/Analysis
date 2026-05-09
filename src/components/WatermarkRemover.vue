@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :data-theme="themeName">
     <!-- 顶部导航栏 -->
     <nav class="top-nav">
       <div class="nav-content">
@@ -14,8 +14,11 @@
             {{ tab.label }}
           </button>
         </div>
-        <button class="theme-toggle" @click="toggleTheme">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button type="button" class="theme-toggle" @click.stop.prevent="toggleTheme">
+          <svg v-if="!isDark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="5"/>
             <line x1="12" y1="1" x2="12" y2="3"/>
             <line x1="12" y1="21" x2="12" y2="23"/>
@@ -385,17 +388,20 @@
 
     <!-- 页脚 -->
     <footer class="app-footer">
-      <p>本工具仅供学习交流使用，请尊重原作者版权</p>
+      <p>© 2024 - 2026 <a href="https://analysis.hao006.xyz" target="_blank" rel="noopener noreferrer">analysis.hao006.xyz</a>. All rights reserved | Made by Bngan</p>
     </footer>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { detectPlatform, isValidUrl } from '../utils/platformDetector.js'
 import { removeWatermark, searchNeteaseMusic } from '../services/watermarkService.js'
 
 const activeTab = ref('watermark')
+const isDark = ref(false)
+const themeName = computed(() => isDark.value ? 'dark' : 'light')
+
 const tabs = [
   { id: 'watermark', label: '去水印' },
   { id: 'music', label: '音乐搜索' }
@@ -408,16 +414,49 @@ const isLoading = ref(false)
 const result = ref(null)
 
 const musicKeyword = ref('')
-const musicType = ref('search')
+const musicType = ref('song')
 const isSearchingMusic = ref(false)
 const musicResult = ref(null)
-const isSongLoading = ref(false)
-const audioError = ref(false)
 
 let debounceTimer = null
 
 function toggleTheme() {
-  // 可以在这里实现主题切换逻辑
+  isDark.value = !isDark.value
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  applyTheme()
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    isDark.value = true
+  }
+  applyTheme()
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = themeName.value
+  document.documentElement.style.colorScheme = themeName.value
+}
+
+initTheme()
+
+function extractUrlFromText(text) {
+  if (!text) return ''
+
+  // 先尝试匹配标准 URL 格式
+  const match = String(text).match(/https?:\/\/[^\s，。；、）)"'<>]+/i)
+  
+  if (match) {
+    let url = match[0]
+    // 清理末尾的中英文标点和非 URL 字符
+    url = url.replace(/[，。；、）)"'<>]+$/g, '')
+    // 确保下划线保留在 URL 中
+    return url
+  }
+  
+  // 如果没有匹配到，返回原始文本（可能是纯 URL）
+  return String(text).trim()
 }
 
 function handleUrlInput() {
@@ -427,8 +466,14 @@ function handleUrlInput() {
     inputError.value = ''
     
     if (urlInput.value.trim()) {
-      if (isValidUrl(urlInput.value)) {
-        const platform = detectPlatform(urlInput.value)
+      const extractedUrl = extractUrlFromText(urlInput.value)
+      console.log('[输入链接提取]', {
+        raw: urlInput.value,
+        extracted: extractedUrl
+      })
+
+      if (isValidUrl(extractedUrl)) {
+        const platform = detectPlatform(extractedUrl)
         detectedPlatform.value = platform
         
         if (!platform) {
@@ -445,6 +490,9 @@ function handleUrlInput() {
 }
 
 async function handlePaste(event) {
+  event.preventDefault()
+  event.stopPropagation()
+  
   const pastedText = event.clipboardData.getData('text')
   urlInput.value = pastedText.trim()
   handleUrlInput()
@@ -511,7 +559,6 @@ function clearInput() {
 }
 
 function handleAudioError(event) {
-  audioError.value = true
   console.error('音频播放失败:', event)
 }
 
@@ -520,8 +567,6 @@ async function handleMusicSearch() {
   
   isSearchingMusic.value = true
   musicResult.value = null
-  audioError.value = false
-  
   try {
     const response = await searchNeteaseMusic(musicKeyword.value, musicType.value)
     musicResult.value = response
@@ -555,8 +600,6 @@ async function handleSongAction(song, action) {
     showToast('无法获取歌曲ID，请尝试重新查询')
     return
   }
-  
-  isSongLoading.value = true
   
   try {
     let response
@@ -599,8 +642,6 @@ async function handleSongAction(song, action) {
   } catch (error) {
     console.error('操作失败:', error)
     showToast('操作失败: ' + error.message)
-  } finally {
-    isSongLoading.value = false
   }
 }
 </script>
@@ -613,16 +654,48 @@ async function handleSongAction(song, action) {
 }
 
 .app-container {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-muted: #fafafa;
+  --surface-input: #ffffff;
+  --border: #e5e5e5;
+  --border-soft: #f0f0f0;
+  --text: #333333;
+  --text-strong: #1a1a1a;
+  --text-muted: #666666;
+  --text-subtle: #888888;
+  --primary: #1890ff;
+  --success: #52c41a;
+  --active-bg: #e8f4fd;
   min-height: 100vh;
-  background: #f5f5f5;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--bg);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  color: #333;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container[data-theme="dark"] {
+  --bg: #0f0f0f;
+  --surface: #181818;
+  --surface-muted: #141414;
+  --surface-input: #202020;
+  --border: #2a2a2a;
+  --border-soft: #2a2a2a;
+  --text: #e5e7eb;
+  --text-strong: #ffffff;
+  --text-muted: #a0a0a0;
+  --text-subtle: #8a8a8a;
+  --active-bg: rgba(24, 144, 255, 0.16);
 }
 
 /* 顶部导航 */
 .top-nav {
-  background: white;
-  border-bottom: 1px solid #e5e5e5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -656,13 +729,13 @@ async function handleSongAction(song, action) {
 }
 
 .nav-tab:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .nav-tab.active {
-  background: #e8f4fd;
-  color: #1890ff;
+  background: var(--active-bg);
+  color: var(--primary);
   font-weight: 600;
 }
 
@@ -674,18 +747,29 @@ async function handleSongAction(song, action) {
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .theme-toggle:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.theme-toggle svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* 主内容区 */
 .main-content {
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
   padding: 32px 24px;
+  box-sizing: border-box;
+  flex: 1;
 }
 
 /* 页面标题 */
@@ -720,9 +804,9 @@ async function handleSongAction(song, action) {
 .lyric-card,
 .player-card,
 .error-card {
-  background: white;
+  background: var(--surface);
   border-radius: 8px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--border);
   overflow: hidden;
   margin-bottom: 16px;
 }
@@ -733,8 +817,8 @@ async function handleSongAction(song, action) {
 
 .card-header {
   padding: 16px 24px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-muted);
 }
 
 .card-header h3 {
@@ -746,14 +830,23 @@ async function handleSongAction(song, action) {
 /* 输入组 */
 .url-input-group,
 .search-input-group {
-  display: flex;
+  display: grid;
   gap: 12px;
-  align-items: flex-end;
+  align-items: end;
+  width: 100%;
+}
+
+.url-input-group {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.search-input-group {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .input-field-wrapper,
 .search-field-wrapper {
-  flex: 1;
+  min-width: 0;
 }
 
 .field-label {
@@ -769,11 +862,14 @@ async function handleSongAction(song, action) {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  height: 44px;
   padding: 10px 14px;
   border: 1px solid #d9d9d9;
   border-radius: 6px;
   background: white;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .input-box:focus-within,
@@ -791,6 +887,7 @@ async function handleSongAction(song, action) {
 .url-field,
 .search-field {
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
   font-size: 14px;
@@ -831,7 +928,8 @@ async function handleSongAction(song, action) {
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
-  height: fit-content;
+  height: 44px;
+  box-sizing: border-box;
 }
 
 .action-button.primary {
@@ -889,15 +987,17 @@ async function handleSongAction(song, action) {
 /* 类型选择器 */
 .type-selector {
   padding: 10px 14px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
-  background: white;
+  color: var(--text);
+  background: var(--surface-input);
   cursor: pointer;
   outline: none;
+  height: 44px;
   min-width: 120px;
+  box-sizing: border-box;
 }
 
 .type-selector:focus {
@@ -992,13 +1092,14 @@ async function handleSongAction(song, action) {
 }
 
 .loading-state p {
-  color: #666;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 /* 结果容器 */
 .result-container {
   animation: fadeIn 0.3s ease-out;
+  width: 100%;
 }
 
 @keyframes fadeIn {
@@ -1129,12 +1230,15 @@ async function handleSongAction(song, action) {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .link-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  min-height: 36px;
   padding: 8px 18px;
   border: none;
   border-radius: 6px;
@@ -1143,6 +1247,7 @@ async function handleSongAction(song, action) {
   cursor: pointer;
   transition: all 0.2s;
   text-decoration: none;
+  box-sizing: border-box;
 }
 
 .link-button.primary {
@@ -1156,9 +1261,9 @@ async function handleSongAction(song, action) {
 }
 
 .link-button.secondary {
-  background: white;
-  color: #555;
-  border: 1px solid #d9d9d9;
+  background: var(--surface-input);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .link-button.secondary:hover {
@@ -1232,7 +1337,7 @@ async function handleSongAction(song, action) {
 }
 
 .live-photo-item {
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
   background: white;
@@ -1306,7 +1411,7 @@ async function handleSongAction(song, action) {
 .meta-info-section {
   margin-top: 20px;
   padding: 16px;
-  background: #f6f8fa;
+  background: var(--surface-muted);
   border-radius: 6px;
   border: 1px solid #e5e5e5;
 }
@@ -1318,7 +1423,7 @@ async function handleSongAction(song, action) {
 }
 
 .meta-row:not(:last-child) {
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid var(--border);
 }
 
 .meta-label {
@@ -1383,90 +1488,6 @@ async function handleSongAction(song, action) {
 /* 音乐搜索结果 */
 .music-results {
   animation: fadeIn 0.3s ease-out;
-}
-
-/* 歌曲表格 */
-.songs-table {
-  overflow-x: auto;
-}
-
-.table-head,
-.table-row {
-  display: grid;
-  grid-template-columns: 2fr 1.5fr 1.5fr 140px;
-  gap: 12px;
-  padding: 12px 16px;
-  align-items: center;
-  font-size: 13px;
-}
-
-.table-head {
-  background: #fafafa;
-  font-weight: 600;
-  color: #666;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.table-row {
-  border-bottom: 1px solid #f5f5f5;
-  transition: background 0.2s;
-}
-
-.table-row:hover {
-  background: #fafafa;
-}
-
-.song-name {
-  font-weight: 600;
-  color: #333;
-}
-
-.artist-name {
-  color: #555;
-}
-
-.album-name {
-  color: #888;
-  font-size: 12px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-}
-
-.icon-btn {
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.icon-btn.play {
-  background: #52c41a;
-  color: white;
-}
-
-.icon-btn.lyric {
-  background: #722ed1;
-  color: white;
-}
-
-.icon-btn.download {
-  background: #1890ff;
-  color: white;
-}
-
-.icon-btn:hover {
-  opacity: 0.85;
-  transform: scale(1.05);
 }
 
 /* 歌词显示 */
@@ -1541,13 +1562,13 @@ async function handleSongAction(song, action) {
   display: flex;
   gap: 10px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-soft);
 }
 
 .action-button.secondary-style {
-  background: white;
-  color: #555;
-  border: 1px solid #d9d9d9;
+  background: var(--surface-input);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .action-button.secondary-style:hover {
@@ -1596,8 +1617,8 @@ async function handleSongAction(song, action) {
   padding: 32px 24px;
   color: #999;
   font-size: 13px;
-  border-top: 1px solid #e5e5e5;
-  margin-top: 48px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
 }
 
 /* Toast通知 */
@@ -1627,38 +1648,74 @@ async function handleSongAction(song, action) {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .main-content {
-    padding: 20px 16px;
+    padding: 16px 12px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .page-title {
-    font-size: 22px;
+    font-size: 20px;
+    text-align: center;
+    word-wrap: break-word;
+  }
+
+  .page-subtitle {
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .input-card,
+  .search-card,
+  .result-card {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .card-body {
+    width: 100%;
+    padding: 16px;
   }
 
   .url-input-group,
   .search-input-group {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .input-box,
+  .search-box {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .search-button {
+    width: 100%;
+    max-width: 100%;
+    margin-top: 10px;
   }
 
   .action-button {
     width: 100%;
+    max-width: 100%;
   }
 
   .type-selector {
     width: 100%;
-  }
-
-  .table-head,
-  .table-row {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .col-album {
-    display: none;
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   .images-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .images-grid img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
   }
 
   .live-photos-grid {
@@ -1668,10 +1725,12 @@ async function handleSongAction(song, action) {
   .media-links,
   .player-actions {
     flex-direction: column;
+    width: 100%;
   }
 
   .link-button {
     width: 100%;
+    max-width: 100%;
     justify-content: center;
   }
 
@@ -1679,19 +1738,42 @@ async function handleSongAction(song, action) {
     flex-direction: column;
     align-items: center;
     text-align: center;
+    width: 100%;
   }
 
   .song-cover {
-    width: 150px;
-    height: 150px;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 12px;
+  }
+
+  .song-info-text {
+    width: 100%;
+    text-align: center;
   }
 
   .song-actions {
+    width: 100%;
     flex-direction: column;
+    gap: 8px;
   }
 
   .song-actions .action-button {
     width: 100%;
   }
+
+  .nav-tabs {
+    gap: 8px;
+  }
+
+  .nav-tab {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+}
+
+.app-container[data-theme="dark"] .theme-toggle {
+  color: #fbbf24;
 }
 </style>

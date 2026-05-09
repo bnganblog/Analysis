@@ -61,10 +61,10 @@ export function isValidUrl(url) {
 
 export function extractVideoId(url, platform) {
   const patterns = {
-    xiaohongshu: [/explore\/([a-zA-Z0-9]+)/, /discovery\/item\/([a-zA-Z0-9]+)/],
+    xiaohongshu: [/explore\/([^/?#]+)/, /discovery\/item\/([^/?#]+)/],
     weibo: [/(\d+)/],
-    douyin: [/video\/(\d+)/, /note\/(\d+)/],
-    kuaishou: [/short-video\/([a-zA-Z0-9]+)/, /photo\/([a-zA-Z0-9]+)/],
+    douyin: [/video\/([^/?#]+)/, /note\/([^/?#]+)/],
+    kuaishou: [/short-video\/([^/?#]+)/, /photo\/([^/?#]+)/],
     doubao: [/post\/([a-zA-Z0-9-]+)/]
   }
 

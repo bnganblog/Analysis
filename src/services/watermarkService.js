@@ -28,6 +28,70 @@ async function fetchWithRetry(url, options = {}, retries = 2) {
   }
 }
 
+function extractUrlFromText(text) {
+  if (!text) return ''
+
+  // 先尝试匹配标准 URL 格式
+  let match = String(text).match(/https?:\/\/[^\s，。；、）)"'<>]+/i)
+  
+  if (match) {
+    let url = match[0]
+    // 清理末尾的中英文标点和非 URL 字符
+    url = url.replace(/[，。；、）)"'<>]+$/g, '')
+    // 确保下划线保留在 URL 中
+    return url
+  }
+  
+  // 如果没有匹配到，返回原始文本（可能是纯 URL）
+  return String(text).trim()
+}
+
+async function resolveRedirectUrl(url) {
+  try {
+    const response = await api.get(url, {
+      maxRedirects: 5,
+      timeout: 10000
+    })
+
+    return response.request?.responseURL || response.config?.url || url
+  } catch (error) {
+    console.warn('[小红书] 短链重定向解析失败，使用原始链接:', error.message)
+    return url
+  }
+}
+
+async function normalizeXiaohongshuUrl(url) {
+  try {
+    let parsedUrl = new URL(url)
+
+    if (/xhslink\.com$/.test(parsedUrl.hostname)) {
+      const redirectedUrl = await resolveRedirectUrl(url)
+      parsedUrl = new URL(redirectedUrl)
+    }
+
+    const noteId = parsedUrl.pathname.match(/\/(?:explore|discovery\/item)\/([^/?#]+)/)?.[1]
+
+    if (!noteId) {
+      return url
+    }
+
+    // 手机端链接转换为 PC 端
+    if (/^m\.xiaohongshu\.com$/.test(parsedUrl.hostname)) {
+      const searchParams = parsedUrl.search
+      return `https://www.xiaohongshu.com/explore/${noteId}${searchParams}`
+    }
+
+    // 已经是 PC 端链接，保留原样（包括查询参数）
+    if (/^www\.xiaohongshu\.com$/.test(parsedUrl.hostname)) {
+      return url
+    }
+  } catch (error) {
+    console.warn('[小红书] 链接转换失败，使用原始链接:', error.message)
+  }
+
+  return url
+}
+
 async function useBugpkDouyinApi(url) {
   try {
     const apiUrl = `https://api.bugpk.com/api/douyin?url=${encodeURIComponent(url)}`
@@ -56,18 +120,35 @@ async function useBugpkDouyinApi(url) {
 
 async function useBugpkXhsApi(url) {
   try {
-    const apiUrl = `https://api.bugpk.com/api/xhs?url=${encodeURIComponent(url)}`
-    const response = await fetchWithRetry(apiUrl)
+    const apiUrl = 'https://api.bugpk.com/api/xhs'
+    const pcUrl = await normalizeXiaohongshuUrl(url)
+    console.log('[小红书] 链接规范化:', {
+      raw: url,
+      pc: pcUrl
+    })
+    const params = new URLSearchParams({
+      url: pcUrl
+    })
+    const response = await fetchWithRetry(`${apiUrl}?${params}`)
 
     if (response.data) {
       console.log('[小红书BUGPK] 完整响应:', JSON.stringify(response.data))
 
       const data = response.data
 
-      if (data.code === 200 || data.code === 0 || data.success === true || data.url || data.video_url || data.images) {
-        return parseApiResponse(data, 'xiaohongshu')
-      } else if (data.data) {
-        return parseApiResponse(data.data, 'xiaohongshu')
+      const content = data.data || data
+
+      if (
+        data.code === 200 ||
+        data.code === 0 ||
+        data.success === true ||
+        content.url ||
+        content.video_url ||
+        content.images ||
+        content.imgurl ||
+        content.cover
+      ) {
+        return parseApiResponse(content, 'xiaohongshu')
       } else {
         throw new Error(data.msg || data.message || '解析失败')
       }
@@ -301,9 +382,13 @@ function parseApiResponse(data, platform) {
       result.authorAvatar = sourceData.author.avatar
     } else {
       result.author = sourceData.author
+      result.authorId = sourceData.userId
+      result.authorAvatar = sourceData.avatar
     }
   } else {
     result.author = sourceData.author_name || sourceData.nickname || sourceData.name
+    result.authorId = sourceData.userId
+    result.authorAvatar = sourceData.avatar
   }
 
   if (sourceData.url && !sourceData.url.match(/\.(jpg|jpeg|png|webp|gif)/i)) {
@@ -316,6 +401,10 @@ function parseApiResponse(data, platform) {
 
   if (sourceData.images && Array.isArray(sourceData.images) && sourceData.images.length > 0) {
     result.images = sourceData.images.filter(img => img && img.trim() !== '')
+  }
+
+  if ((!result.images || result.images.length === 0) && Array.isArray(sourceData.imgurl) && sourceData.imgurl.length > 0) {
+    result.images = sourceData.imgurl.filter(img => img && img.trim() !== '')
   }
 
   if (sourceData.live_photo && Array.isArray(sourceData.live_photo) && sourceData.live_photo.length > 0) {
@@ -457,6 +546,7 @@ export async function removeWeiboWatermark(url) {
 
 export async function removeDouyinWatermark(url) {
   console.log('\n[抖音] 开始处理:', url)
+  console.log('[抖音] URL 包含 _:', url.includes('_'), '| _ 位置:', url.indexOf('_'))
   
   const apis = [
     () => useBugpkDouyinApi(url),
@@ -466,6 +556,9 @@ export async function removeDouyinWatermark(url) {
   ]
 
   for (const apiFunc of apis) {
+    console.log(`[抖音] 调用 ${apiFunc.name || 'API'}，URL:`, url)
+    console.log('[抖音] 调用前 URL 包含 _:', url.includes('_'))
+    
     try {
       const result = await apiFunc(url)
       result.platform = 'douyin'
@@ -562,28 +655,30 @@ function extractImagesFromContent(htmlContent) {
 }
 
 export async function removeWatermark(url, platform) {
+  const extractedUrl = extractUrlFromText(url)
+
   console.log('\n========== 开始去水印 ==========')
   console.log('平台:', platform)
-  console.log('URL:', url)
+  console.log('URL:', extractedUrl)
   
   try {
     let result
     
     switch (platform) {
       case 'xiaohongshu':
-        result = await removeXiaohongshuWatermark(url)
+        result = await removeXiaohongshuWatermark(extractedUrl)
         break
       case 'weibo':
-        result = await removeWeiboWatermark(url)
+        result = await removeWeiboWatermark(extractedUrl)
         break
       case 'douyin':
-        result = await removeDouyinWatermark(url)
+        result = await removeDouyinWatermark(extractedUrl)
         break
       case 'kuaishou':
-        result = await removeKuaishouWatermark(url)
+        result = await removeKuaishouWatermark(extractedUrl)
         break
       case 'doubao':
-        result = await removeDoubaoWatermark(url)
+        result = await removeDoubaoWatermark(extractedUrl)
         break
       default:
         result = {
