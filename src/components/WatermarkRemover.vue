@@ -610,6 +610,8 @@ async function handleSongAction(song, action) {
         if (response.success && response.url) {
           musicResult.value = { ...musicResult.value, url: response.url }
           showToast('获取播放链接成功！')
+        } else if (response.success) {
+          showToast('该歌曲暂无播放链接，可能受版权限制')
         } else {
           showToast(response.error || '获取播放链接失败')
         }
@@ -634,6 +636,8 @@ async function handleSongAction(song, action) {
           link.target = '_blank'
           link.click()
           showToast('正在下载...')
+        } else if (response.success) {
+          showToast('该歌曲暂无下载链接，可能受版权限制')
         } else {
           showToast(response.error || '下载链接获取失败')
         }

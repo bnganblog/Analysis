@@ -291,7 +291,13 @@ async function searchNeteaseMusic(keyword, type = 'search', page = 1, limit = 10
         } else if (type === 'song') {
           result.songs = data.data ? [data.data] : []
         } else if (type === 'url') {
-          result.url = data.data?.[0]?.url || data.url
+          let extractedUrl = null
+          if (Array.isArray(data.data) && data.data.length > 0) {
+            extractedUrl = data.data[0].url
+          } else if (data.data && typeof data.data === 'object') {
+            extractedUrl = data.data.url || data.data.data?.url
+          }
+          result.url = extractedUrl || data.url
           result.songs = data.data || []
         } else if (type === 'lyric') {
           result.lyric = data.data?.lrc || data.data?.lyric || data.lyric
