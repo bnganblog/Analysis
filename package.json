@@ -1,7 +1,10 @@
 {
   "name": "watermark-remover",
+  "version": "1.0.0",
+  "description": "多平台视频/图文去水印工具，支持小红书、微博、抖音、快手、豆包等主流平台",
+  "author": "Bngan",
+  "license": "MIT",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
