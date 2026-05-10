@@ -1,5 +1,25 @@
 <template>
   <div class="app-container" :data-theme="themeName">
+    <!-- 页面加载提示弹窗 -->
+    <div v-if="showTipModal" class="tip-modal-overlay" @click="closeTipModal">
+      <div class="tip-modal" @click.stop>
+        <div class="tip-modal-header">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <h3>温馨提示</h3>
+        </div>
+        <div class="tip-modal-content">
+          <p>如遇到解析失败请使用夸克浏览器重试</p>
+        </div>
+        <div class="tip-modal-footer">
+          <button @click="closeTipModal" class="tip-modal-btn primary">我知道了</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 顶部导航栏 -->
     <nav class="top-nav">
       <div class="nav-content">
@@ -394,13 +414,14 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { detectPlatform, isValidUrl } from '../utils/platformDetector.js'
 import { removeWatermark, searchNeteaseMusic } from '../services/watermarkService.js'
 
 const activeTab = ref('watermark')
 const isDark = ref(false)
 const themeName = computed(() => isDark.value ? 'dark' : 'light')
+const showTipModal = ref(false)
 
 const tabs = [
   { id: 'watermark', label: '去水印' },
@@ -419,6 +440,14 @@ const isSearchingMusic = ref(false)
 const musicResult = ref(null)
 
 let debounceTimer = null
+
+function closeTipModal() {
+  showTipModal.value = false
+}
+
+onMounted(() => {
+  showTipModal.value = true
+})
 
 function toggleTheme() {
   isDark.value = !isDark.value
@@ -655,6 +684,99 @@ async function handleSongAction(song, action) {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* 弹窗样式 */
+.tip-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.tip-modal {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: 400px;
+  width: 90%;
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tip-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.tip-modal-header svg {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.tip-modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.tip-modal-content {
+  padding: 24px;
+}
+
+.tip-modal-content p {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.tip-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.tip-modal-btn {
+  padding: 10px 32px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tip-modal-btn.primary {
+  background: #1890ff;
+  color: white;
+}
+
+.tip-modal-btn.primary:hover {
+  background: #40a9ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.35);
 }
 
 .app-container {
